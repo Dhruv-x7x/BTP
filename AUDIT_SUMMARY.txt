@@ -1,0 +1,456 @@
+================================================================================
+THOROUGH AUDIT SUMMARY: am101_dataset_research.ipynb
+================================================================================
+
+AUDIT COMPLETION DATE: 2025-11-20
+NOTEBOOK STATUS: Fully Analyzed
+DOCUMENTATION GENERATED: 2 comprehensive documents (23KB + 9.3KB)
+
+================================================================================
+1. OVERALL NOTEBOOK PURPOSE
+================================================================================
+
+This is a comprehensive research notebook implementing FOUR distinct hyperspectral 
+image unmixing algorithms for comparing their performance on standard datasets:
+
+1. MiSiCNet     - Deep CNN-based unmixing (1,087 lines of trainer code)
+2. TransNet     - Vision Transformer-based unmixing (transformer architecture)
+3. NFINDR       - Classical geometric endmember extraction (456 lines)
+4. PMM          - Bayesian probabilistic model with SVI/MCMC (582 lines)
+
+Scope: Google Colab-hosted research code for AM101 dataset analysis
+Total: 36 cells, ~50K tokens, 34 code cells with comprehensive implementation
+
+================================================================================
+2. QUICK STATISTICS
+================================================================================
+
+Functions Defined:         108 total
+Classes Defined:           22 total
+Code Cells:                34 cells
+Markdown Headers:          2 cells
+Import Dependencies:       50+ packages
+
+Algorithms:                4 major unmixing methods
+Datasets Supported:        4 (Samson, Apex, Urban, Jasper)
+Evaluation Metrics:        6+ (SAD, RMSE, SNR, RE, SID, Entropy)
+Multi-run Experiments:     Standard 5-run protocol (seeds: 101,202,303,404,505)
+
+Output Formats:            .mat, .npy, PNG, CSV, LaTeX tables
+Visualization Types:       Endmembers, Abundances, Activations, Attention maps
+
+================================================================================
+3. MAJOR COMPONENTS BREAKDOWN
+================================================================================
+
+PHASE 1: SETUP (Cells 0-4)
+  - Title, references to UPCGIT Hyperspectral-Unmixing-Models repo
+  - Dataset path configuration (DATASET_PATH, OUTPUT_PATH)
+  - All 50+ imports including PyTorch, Pyro, Scipy, scikit-learn
+
+PHASE 2: UTILITY FUNCTIONS (Cells 5-11) - 24 key functions
+  - Network initialization: get_noise(), fill_noise(), get_params()
+  - Distance metrics: Eucli_dist(), Endmember_extract()
+  - Data I/O: load_HSI() - loads .mat or HDF5 files with normalization
+  - Performance metrics: numpy_RMSE(), numpy_SAD(), order_endmembers()
+  - Advanced metrics: compute_snr_per_endmember(), compute_entropy()
+  - Visualization: plotEndmembersAndGT(), plotAbundancesSimple() (4 functions)
+  - Dimensionality reduction: pca(), hyperVca() - automatic endmember detection
+  - Loss computation: Nuclear_norm(), compute_sad()
+
+PHASE 3: MODEL DEFINITIONS (Cells 15-23) - 5 major models + 12 supporting classes
+  Loss Functions (4):
+    - SparseKLloss: OSP-based sparsity using nuclear norm
+    - SumToOneLoss: L1 constraint on abundance sums
+    - SAD: Spectral Angle Distance loss
+    - SID: Spectral Information Divergence loss
+
+  MiSiCNet (1):
+    - Skip-path + main-path CNN architecture
+    - 256-channel convolutions, batch norm, LeakyReLU
+    - Outputs: Endmembers (P, bands) + Abundances (rows, cols, P)
+
+  Vision Transformer (7 classes):
+    - PreNorm: Layer normalization wrapper
+    - FeedForward: 2-layer MLP with GELU
+    - CrossAttention: Multi-head attention mechanism
+    - CrossAttentionBlock: Attention + residual connection
+    - Transformer: Stack of cross-attention layers
+    - ViT: Full Vision Transformer with patch embedding
+    - AutoEncoder: Abundance reconstruction decoder
+
+  Classical Algorithm (1):
+    - NFINDRModel: N-Findr with PCA + greedy simplex volume maximization
+
+  Probabilistic Model (1):
+    - PMMRunner: Bayesian mixture model with SVI/MCMC inference
+
+PHASE 4: TRAINING ORCHESTRATORS (Cell 25)
+  MiSiCTrainer (1,087 lines):
+    - Loads dataset, initializes network input (random tensor)
+    - Training loop: Adam optimizer, composite loss function
+    - Per-epoch diagnostics: SNR, entropy, activation visualization
+    - Saves per-run: E_*.npy, A_*.npy, *.mat files
+    - CSV outputs: SAD results, RMSE results, reconstruction errors
+    - Read-only activation hooks for network diagnosis
+
+  TransNetTrainer:
+    - Batch-wise pixel processing
+    - Same loss as MiSiCNet
+    - PLUS attention map visualization (transformer-specific)
+    - Per-epoch visual progress tracking (reconstruction errors, abundances)
+    - Same CSV metric outputs
+
+PHASE 5: EXPERIMENTAL EXECUTION (Cells 26-35)
+  Cell 28-29: MiSiCNet Execution
+    - Single run demo (epochs=600) with visual plotting enabled
+    - Multi-run experiment (5 seeds, 1000 epochs each)
+    - Result aggregation and CSV summary
+
+  Cell 30-31: TransNet Execution
+    - 5-run protocol (NUM_RUNS=5, EPOCHS_OVERRIDE=500)
+    - LaTeX table generation for publication
+    - Activation & attention visualization display
+
+  Cell 32-33: NFINDR Execution
+    - Simple instantiation: NFINDRRunner().run(runs=5, seeds=[1,2,3,4,5])
+    - Deterministic (no training), fast execution
+
+  Cell 34-35: PMM Execution
+    - PMMRunner with configurable inference (SVI or MCMC)
+    - SVI: 1200 steps, lr=5e-3
+    - MCMC: NUTS sampler with warmup
+    - Outputs: .mat files, PNG visualizations, CSV summaries
+
+================================================================================
+4. DETAILED FUNCTION CATALOG (108 FUNCTIONS)
+================================================================================
+
+INITIALIZATION & UTILITIES (5):
+  - OSP(B, R) - Orthogonal subspace projection metric
+  - fill_noise(x, noise_type, ...) - Fills tensor with U/N noise
+  - get_noise(input_depth, method, ...) - Network input generation
+  - get_params(opt_over, net, ...) - Parameter extraction for optimization
+  - conv(in_f, out_f, ...) - Configurable convolution wrapper
+
+DISTANCE & EXTRACTION (3):
+  - Eucli_dist(x, y) - Euclidean distance
+  - Endmember_extract(x, p) - Greedy endmember extraction
+  - (+ many internal helper functions)
+
+DATA MANAGEMENT (1):
+  - load_HSI(path) - Loads .mat/.h5 HSI, normalizes, returns HSI object
+
+PERFORMANCE METRICS (6):
+  - numpy_RMSE(y_true, y_pred) - Root mean square error
+  - numpy_SAD(y_true, y_pred) - Spectral angle distance
+  - order_abundance(abundance, abundanceGT) - Reorder by MSE matching
+  - order_endmembers(endmembers, endmembersGT) - Reorder by SAD matching
+  - compute_abundances_fcls(Y, E, ...) - Fully Constrained Least Squares
+  - compute_snr_per_endmember(hsi, out_avg_np, Eest) - Per-endmember SNR
+  - compute_entropy(abundance_maps) - Spatial entropy metric
+
+VISUALIZATION (6):
+  - plotEndmembersAndGT(endmembers, endmembersGT, ...) - Side-by-side endmember plots
+  - plotAbundancesSimple(abundances, abundanceGT, ...) - Abundance map grid
+  - plotAbundancesGT(abundanceGT, ...) - Ground truth abundances
+  - plotAbundancesAndGT(abundances, abundanceGT, ...) - Estimated vs GT
+  - (+ 2 helper functions for result display)
+
+DIMENSIONALITY REDUCTION (2):
+  - pca(X, d) - PCA projection to d dimensions
+  - hyperVca(M, q) - Hyperspectral Virtual Dimensionality detection
+
+LOSS COMPUTATION (2):
+  - Nuclear_norm(inputs) - Nuclear norm for sparse regularization
+  - compute_sad(inp, target) - SAD loss between spectra
+
+DIAGNOSTIC HELPERS (4+):
+  - compute_entropy() - Spatial entropy of abundance maps
+  - report_time_and_memory(start_time) - Timing and memory statistics
+  - stack_and_stats(list_of_arrays) - Multi-run aggregation
+  - Various hooks (_make_hook, hook, train_step, my_loss) for diagnostics
+
+CLASS METHODS & INTERNAL FUNCTIONS (70+):
+  - MiSiCNet.__init__, .forward
+  - Vision Transformer components: __init__, .forward methods
+  - NFINDR: _to_band_pixel, _simplex_volume, fit, fit_transform
+  - PMM: _pyro_model, _fit_svi, _fit_mcmc, _compute_snr_per_endmember, etc.
+  - Trainers: run, _compute_snr_per_endmember, _compute_entropy, etc.
+
+POST-PROCESSING HELPERS (6):
+  - safe_load_csv(p) - Loads CSV safely
+  - mean_std_str(arr) - Mean/std extraction
+  - latex_table_endmembers(...) - LaTeX table generation
+  - show_if_exists(path, ...) - Conditional image display
+  - summarize_csv(path, name) - CSV summary statistics
+  - show_image_if_exists(path, ...) - Image display wrapper
+
+================================================================================
+5. DETAILED CLASS CATALOG (22 CLASSES)
+================================================================================
+
+DATA HANDLING (3):
+  1. HSI - Hyperspectral image container
+     - Stores: data(rows,cols,bands), gt(P,bands), abundance_gt(rows,cols,P)
+     - Methods: __init__(data,rows,cols,gt,abundance_gt), array()
+
+  2. TrainData(torch.utils.data.Dataset) - PyTorch dataset wrapper
+     - Returns: single pixel tensors
+     - Methods: __init__(img, transform), __getitem__, __len__
+
+  3. Data - Multi-dataset loader
+     - Manages: all datasets (Samson, Apex, Urban, Jasper)
+     - Methods: __init__(dataset, device), get(typ), get_loader(batch_size)
+
+GRADIENT CLIPPING (1):
+  4. NonZeroClipper - Custom gradient clipper to [-1,1] for non-zero weights
+
+LOSS FUNCTIONS (4):
+  5. SparseKLloss(nn.Module) - Nuclear norm sparsity loss
+  6. SumToOneLoss(nn.Module) - Abundance sum-to-one constraint (L1)
+  7. SAD(nn.Module) - Spectral Angle Distance loss
+  8. SID(nn.Module) - Spectral Information Divergence loss
+
+NEURAL NETWORK ARCHITECTURES (8):
+  9. MiSiCNet(nn.Module) - CNN with skip connections
+     - Architecture: skip+main paths, 256-channel conv, upsampling, encoding
+     - Output: endmembers + abundances
+
+  10. PreNorm(nn.Module) - LayerNorm wrapper
+  11. FeedForward(nn.Module) - 2-layer MLP with GELU
+  12. CrossAttention(nn.Module) - Multi-head cross-attention
+  13. CrossAttentionBlock(nn.Module) - Attention + residual
+  14. Transformer(nn.Module) - Stack of cross-attention layers
+  15. ViT(nn.Module) - Full Vision Transformer
+      - Patch embedding, position encoding, transformer blocks, AutoEncoder decoder
+  16. AutoEncoder(nn.Module) - Encoder-decoder for abundances
+
+CLASSICAL ALGORITHMS (2):
+  17. NFINDRModel - N-Findr endmember extraction
+      - PCA reduction + greedy simplex volume maximization
+      - Methods: __init__, fit(Y), fit_transform(Y)
+
+  18. NFINDRRunner - Orchestrator for NFINDR
+      - Methods: __init__(...), run(runs, seeds)
+
+PROBABILISTIC INFERENCE (1):
+  19. PMMRunner - Bayesian mixture model with Pyro
+      - Graphical model: M~Dir(α), A~Dir(β), Y|M,A ~ N(A^T·M, σ²)
+      - Methods: __init__(...), _pyro_model, _fit_svi, _fit_mcmc, run
+
+TRAINING ORCHESTRATORS (2):
+  20. MiSiCTrainer - MiSiCNet training manager (1087 lines)
+      - Methods: __init__, run(runs, seedrng, epochs_no)
+      - Produces: per-endmember SNR, entropy, activation visualizations
+      - Output: .npy, .mat, PNG, CSV files
+
+  21. TransNetTrainer - Vision Transformer training manager
+      - Methods: __init__, run(num_runs, seeds, epochs_override, ...)
+      - PLUS: attention map visualization (transformer-specific)
+      - Output: activation + attention PNG, same CSV metrics
+
+UTILITY (1):
+  22. H - Hypothesized helper class (incomplete reference)
+
+================================================================================
+6. KEY ALGORITHMS & ANALYSIS TECHNIQUES
+================================================================================
+
+SPECTRAL UNMIXING METHODS:
+
+1. MiSiCNet (Deep Learning - CNN)
+   - End-to-end learning with random initialization
+   - Loss: L2 reconstruction + OSP sparsity + sum-to-one constraint
+   - Training: Adam optimizer, batch processing
+   - Output: Direct endmember/abundance estimation
+   - Advantages: No explicit initialization, flexible, learns complex patterns
+
+2. TransNet (Deep Learning - Vision Transformer)
+   - Attention-based architecture for global receptive field
+   - Patch embedding + transformer blocks + cross-attention
+   - Loss: Same as MiSiCNet
+   - Training: Batch-wise pixel processing
+   - Advantages: Captures long-range dependencies via attention
+
+3. NFINDR (Classical Geometric)
+   - Greedy simplex volume maximization in PCA subspace
+   - Multi-restart for robustness
+   - FCLS for abundance computation
+   - No training required
+   - Advantages: Fast, interpretable, deterministic
+
+4. PMM (Bayesian Probabilistic)
+   - Graphical model: Dirichlet priors on endmembers/abundances
+   - Normal likelihood with learned noise
+   - Two inference methods:
+     a. SVI: Variational approximation (fast, scalable)
+     b. MCMC: NUTS sampler (exact, slow)
+   - Advantages: Uncertainty quantification, principled Bayesian approach
+
+PERFORMANCE METRICS:
+
+1. Spectral Angle Distance (SAD)
+   - SAD(v1,v2) = arccos(|v1·v2|/(||v1||·||v2||)) in [0,π/2]
+   - Measures spectral similarity
+   - Per-endmember evaluation
+
+2. Root Mean Square Error (RMSE)
+   - RMSE = sqrt(mean((A_est - A_gt)²))
+   - Per-endmember on abundance maps
+   - Lower is better
+
+3. Signal-to-Noise Ratio (SNR)
+   - SNR_dB = 10·log10(||A_true||² / ||A_est-A_true||²)
+   - Per-endmember independent computation
+   - Higher is better
+
+4. Reconstruction Error (RE)
+   - RE = ||Y - A_est @ E_est||_F / ||Y||_F
+   - Frobenius norm overall fidelity
+   - Lower is better
+
+5. Spectral Information Divergence (SID)
+   - KL-divergence treating spectra as probability distributions
+   - Alternative to SAD
+
+6. Spatial Entropy
+   - Entropy of abundance map spatial distribution
+   - Measures concentration vs spread
+   - Indicator of regularization quality
+
+================================================================================
+7. DATA PROCESSING & WORKFLOWS
+================================================================================
+
+LOADING PIPELINE:
+  1. load_HSI(path) → reads .mat or .h5
+  2. Normalization: divide by max(all_bands)
+  3. Create HSI object: (rows, cols, bands) + GT endmembers + abundances
+
+ENDMEMBER INITIALIZATION:
+  - MiSiCNet/TransNet: Random noise tensor concatenated with PCA-reduced HSI
+  - NFINDR: PCA reduction followed by greedy selection
+  - PMM: Learned via Bayesian inference
+
+TRAINING LOOP (Deep Models):
+  for epoch in epochs:
+    loss = reconstruction_loss(Y_true, A·E)
+         + λ·sparse_loss(E)
+         + γ·sum_to_one_loss(A)
+    optimizer.step(loss)
+    if epoch % interval: save_metrics()
+
+METRIC COMPUTATION:
+  1. Reorder estimated endmembers to match GT (SAD-based)
+  2. Reorder abundance maps to match GT (MSE-based)
+  3. Compute per-endmember: SAD, RMSE, SNR, entropy
+  4. Compute overall: reconstruction error
+  5. Aggregate across runs: mean ± std
+
+POST-PROCESSING:
+  1. Load CSV results from all runs
+  2. Compute statistics per endmember
+  3. Generate LaTeX publication tables
+  4. Save visualizations (PNG endmembers, abundances, activations)
+  5. Display in Jupyter notebook
+
+OUTPUT STRUCTURE:
+  OUTPUT_PATH/
+  ├── MiSiCNet/{dataset}/
+  │   ├── run{i}/ → E_run{i}.npy, A_run{i}.npy, *.mat
+  │   ├── endmember/ → PNG visualizations
+  │   ├── abundance/ → PNG visualizations
+  │   ├── activations/ → Feature map PNG + CSV stats
+  │   └── *_results.csv
+  ├── TAEU/{dataset}/ → TransNet (similar structure + attentions/)
+  ├── NFINDR/{dataset}/
+  └── PMM/{dataset}/
+
+================================================================================
+8. VISUALIZATION & OUTPUT
+================================================================================
+
+IMAGES GENERATED:
+  - Endmember comparison (estimated vs GT) with SAD titles
+  - Abundance map grid (one per endmember) with RMSE overlay
+  - Activation feature maps (first 8 channels)
+  - Attention weight matrices (TransNet-specific)
+  - Training progress curves (per-epoch metrics)
+
+DATA FILES:
+  - {dataset}_endmember_SAD_results.csv - Per-endmember SAD across runs
+  - {dataset}_abundance_RMSE_results.csv - Per-endmember RMSE across runs
+  - {dataset}_reconstruction_errors.csv - Overall RE per run
+  - E_run{i}.npy - Endmembers (P, bands)
+  - A_run{i}.npy - Abundances (rows, cols, P)
+  - {dataset}_run{i}.mat - MATLAB format with E, A, Y_recon
+
+SUMMARY STATISTICS:
+  - Mean ± std per endmember across 5 runs
+  - LaTeX tables for publication
+  - Channel-wise activation statistics
+  - Per-run timing and memory usage
+
+================================================================================
+9. DOCUMENTATION FILES GENERATED
+================================================================================
+
+Two comprehensive markdown documents saved to /home/user/BTP/:
+
+1. NOTEBOOK_AUDIT_COMPREHENSIVE.md (23KB, 598 lines)
+   - Sections 1-8 with complete function/class documentation
+   - All 108 functions catalogued with signatures and purposes
+   - All 22 classes with methods, architecture, and usage
+   - Data workflows and metric descriptions
+   - Overall flow and design patterns
+
+2. ARCHITECTURE_DETAILS.md (9.3KB, 331 lines)
+   - MiSiCNet forward pass block diagram
+   - Vision Transformer architecture visualization
+   - Loss function mathematical definitions
+   - NFINDR algorithm pseudocode
+   - PMM Bayesian graphical model
+   - Formal metric definitions with equations
+   - Training workflow pseudocode
+
+================================================================================
+10. KEY FINDINGS & STRUCTURE SUMMARY
+================================================================================
+
+STRENGTHS:
+  ✓ Comprehensive multi-algorithm comparison framework
+  ✓ Well-organized modular code (separate trainers per method)
+  ✓ Extensive diagnostic capabilities (SNR, entropy, activation viz)
+  ✓ Multi-run experiment protocol with seed variation
+  ✓ Automatic result aggregation and CSV/LaTeX output
+  ✓ Both classical (NFINDR) and modern deep learning approaches
+  ✓ Bayesian alternative (PMM) with SVI/MCMC options
+  ✓ GPU/CPU flexible device support
+
+COMPLEXITY:
+  - MiSiCTrainer: 1087 lines - largest single class
+  - TransNetTrainer: Slightly smaller, similar structure
+  - PMMRunner: 582 lines with Bayesian inference
+  - Vision Transformer: 187 lines for architecture alone
+
+DATA FLOW:
+  HSI file → load_HSI() → HSI object
+  HSI object → [MiSiCTrainer | TransNetTrainer | NFINDRRunner | PMMRunner]
+  Each method → per-run results → aggregate → CSV/LaTeX/PNG output
+
+CONFIGURATION:
+  - Datasets: Samson (default), Apex, Urban, Jasper
+  - Seeds: [101, 202, 303, 404, 505] for 5-run protocol
+  - Device: 'cuda' (default) or 'cpu'
+  - Epochs: MiSiCNet/TransNet 600-1000, NFINDR instant, PMM configurable
+
+================================================================================
+
+Complete audit documentation available in:
+  /home/user/BTP/NOTEBOOK_AUDIT_COMPREHENSIVE.md
+  /home/user/BTP/ARCHITECTURE_DETAILS.md
+
+Analysis completed: November 20, 2025
+
+================================================================================
