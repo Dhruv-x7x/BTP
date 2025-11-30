@@ -1,6 +1,4 @@
-# DETAILED ARCHITECTURE SPECIFICATIONS
-
-## MiSiCNet Architecture Deep Dive
+## MiSiCNet Architecture
 
 ```
 Input: noise_tensor (1, bands+depth, rows, cols) + normalized HSI
@@ -57,7 +55,7 @@ in→4            in→256
 - Endmembers: shape (P, bands) after reshaping x2
 - Abundances: shape (rows, cols, P)
 
-## Vision Transformer (TransNet) Architecture
+## TransNet Architecture
 
 ```
 Input: HSI data (bands,) per pixel or (rows*cols, bands)
@@ -112,42 +110,6 @@ Output: (P,) abundances per pixel
 - Number of heads: 8 (typical)
 - Depth: typically 4-6 transformer blocks
 - Dropout: 0.1-0.2 (typical)
-
-## Loss Functions in Detail
-
-### Reconstruction Loss
-```python
-L_recon = MSE(Y_true, Y_reconstructed)
-        = MSE(Y_true, A @ E)
-        where A = abundances, E = endmembers
-```
-
-### Sparse Regularization (OSP-based)
-```python
-L_sparse = ||E @ E^T||_upper  (off-diagonal sum of Gram matrix)
-Discourages correlated endmembers
-Weighted by λ hyperparameter
-```
-
-### Sum-to-One Constraint Loss
-```python
-L_sum = ||sum(A, axis=1) - 1||_1
-Ensures abundances sum to 1 per pixel
-L1 norm (absolute error) - robust to outliers
-Weighted by γ hyperparameter
-```
-
-### Spectral Angle Distance Loss
-```python
-SAD(v1, v2) = arccos(v1·v2 / (||v1||·||v2||))
-Range: 0 to π radians (0 to 180 degrees)
-Measures spectral similarity
-```
-
-### Total Training Loss
-```python
-L_total = α·L_recon + λ·L_sparse + γ·L_sum
-```
 
 ## NFINDR Algorithm Details
 
@@ -264,68 +226,3 @@ For each endmember map A[:,:,i]:
 Measures spatial concentration
 Higher entropy → more spread (less sharp)
 ```
-
-## Training Workflow Pseudocode
-
-```python
-for run in range(num_runs):
-    # Set random seed
-    np.random.seed(seed[run])
-    torch.manual_seed(seed[run])
-    
-    # Load data
-    hsi = load_HSI(dataset_path)
-    Y_true = hsi.array()  # (pixels, bands)
-    
-    # Initialize model
-    if method == 'MiSiCNet':
-        net = MiSiCNet(...)
-        net_input = get_noise(...)
-    elif method == 'TransNet':
-        net = ViT(...)
-        net_input = Y_true  # batch processing
-    
-    # Optimizer
-    optimizer = Adam(net.parameters(), lr=learning_rate)
-    
-    # Training loop
-    for epoch in range(num_epochs):
-        for batch in dataloader:
-            # Forward pass
-            E_est, A_est = net(batch)
-            
-            # Compute loss
-            loss_recon = MSE(Y_true, A_est @ E_est)
-            loss_sparse = sparse_loss(E_est)
-            loss_constraint = sum_to_one_loss(A_est)
-            
-            loss_total = loss_recon + λ·loss_sparse + γ·loss_constraint
-            
-            # Backward pass
-            optimizer.zero_grad()
-            loss_total.backward()
-            
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
-            
-            optimizer.step()
-        
-        # Metrics & Visualization
-        if epoch % save_interval == 0:
-            E_est_np = E_est.detach().cpu().numpy()
-            A_est_np = A_est.detach().cpu().numpy()
-            
-            # Reorder to match GT
-            idx_E = order_endmembers(E_est_np, E_true)
-            idx_A = order_abundance(A_est_np, A_true)
-            
-            # Compute metrics
-            sad = compute_SAD(E_est_np[idx_E], E_true)
-            rmse = compute_RMSE(A_est_np[..., idx_A], A_true)
-            snr = compute_SNR_per_endmember(hsi, A_est_np, E_est_np)
-            
-            # Save results
-            save_visualizations(E_est_np, A_est_np, output_dir)
-            save_csv_results(sad, rmse, output_dir)
-```
-
